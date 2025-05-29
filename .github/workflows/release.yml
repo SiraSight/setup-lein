@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+env:
+  VERSION: 1.0.0
+
+jobs:
+  test:
+    name: Test Action
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate action.yml
+        run: |
+          # Basic validation of the action.yml file
+          if [ ! -f action.yml ]; then
+            echo "❌ action.yml file not found"
+            exit 1
+          fi
+          
+          echo "✅ action.yml found"
+          
+          # Check if required fields are present
+          grep -q "name:" action.yml || (echo "❌ Missing 'name' field" && exit 1)
+          grep -q "description:" action.yml || (echo "❌ Missing 'description' field" && exit 1)
+          grep -q "runs:" action.yml || (echo "❌ Missing 'runs' field" && exit 1)
+          
+          echo "✅ action.yml validation passed"
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if tag exists
+        id: check-tag
+        run: |
+          if git tag | grep -q "^v${{ env.VERSION }}$"; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create and push tag
+        if: steps.check-tag.outputs.exists == 'false'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ env.VERSION }}" -m "Release version ${{ env.VERSION }}"
+          git push origin "v${{ env.VERSION }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        if: steps.check-tag.outputs.exists == 'false'
+        run: |
+          gh release create "v${{ env.VERSION }}" \
+            --title "Release v${{ env.VERSION }}" \
+            --notes "Leiningen setup GitHub Action release v${{ env.VERSION }}" \
+            --latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
