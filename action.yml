@@ -1,0 +1,35 @@
+name: 'Multiplatform docker build'
+description: 'Build multiarch image and push to ecr'
+inputs:
+  lein-version:
+    description: 'Version of leiningen to install'
+    required: false
+    default: '2.9.1'
+runs:
+  using: "composite"
+  steps:
+    - name: Install leiningen
+      env:
+        LEIN_VERSION: 2.9.1
+        LEIN_INSTALL: /usr/local/bin/
+        LEIN_SHA: a4c239b407576f94e2fef5bfa107f0d3f97d0b19c253b08860d9609df4ab8b29
+        LEIN_GPG_KEY: 2B72BF956E23DE5E830D50F6002AF007D1A7CC18
+        LEIN_ROOT: 1
+        CLOJURE_VER: 1.10.3.933
+        CLOJURESCRIPT_VER: 1.10.866
+      shell: bash
+      run: |
+        set -x; mkdir -p $LEIN_INSTALL \
+        && wget -q https://github.com/technomancy/leiningen/archive/$LEIN_VERSION.tar.gz \
+        && echo "Comparing archive checksum ..." \
+        && echo "$LEIN_SHA *$LEIN_VERSION.tar.gz" | sha256sum -c - \
+        && mkdir ./leiningen \
+        && tar -xzf $LEIN_VERSION.tar.gz  -C ./leiningen/ --strip-components=1 \
+        && mv leiningen/bin/lein-pkg $LEIN_INSTALL/lein \
+        && rm -rf $LEIN_VERSION.tar.gz ./leiningen \
+        && chmod 0755 $LEIN_INSTALL/lein \
+        && wget -q https://github.com/technomancy/leiningen/releases/download/$LEIN_VERSION/leiningen-$LEIN_VERSION-standalone.zip \
+        && wget -q https://github.com/technomancy/leiningen/releases/download/$LEIN_VERSION/leiningen-$LEIN_VERSION-standalone.zip.asc \
+        && rm -f leiningen-$LEIN_VERSION-standalone.zip.asc \
+        && mkdir -p /usr/share/java \
+        && mv leiningen-$LEIN_VERSION-standalone.zip /usr/share/java/leiningen-$LEIN_VERSION-standalone.jar
