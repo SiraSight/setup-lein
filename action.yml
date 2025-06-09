@@ -1,132 +1,33 @@
 name: 'Setup Leiningen'
-description: 'Optimized Leiningen setup for SiraSight projects with anti-hanging measures'
+description: 'Simple Leiningen setup for SiraSight projects'
 inputs:
   lein-version:
     description: 'Version of leiningen to install'
     required: false
     default: '2.9.1'
-  cache-enable:
-    description: 'Enable caching of Leiningen installation'
-    required: false
-    default: 'true'
-  timeout-seconds:
-    description: 'Timeout for network operations in seconds'
-    required: false
-    default: '30'
-branding:
-  icon: 'download'
-  color: 'blue'
 runs:
   using: "composite"
   steps:
-    - name: Cache Leiningen installation
-      if: inputs.cache-enable == 'true'
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.lein
-          /usr/local/bin/lein
-          /usr/share/java/leiningen-*-standalone.jar
-        key: lein-${{ inputs.lein-version }}-${{ runner.os }}
-        restore-keys: |
-          lein-${{ inputs.lein-version }}-
-          lein-
-      
-    - name: Install Leiningen ${{ inputs.lein-version }}
-      env:
-        LEIN_VERSION: ${{ inputs.lein-version }}
-        LEIN_INSTALL: /usr/local/bin/
-        LEIN_ROOT: 1
-        # Optimized timeouts for network operations
-        WGET_TIMEOUT: ${{ inputs.timeout-seconds }}
-        # JVM network optimizations
-        _JAVA_OPTIONS: "-Dsun.net.client.defaultConnectTimeout=${{ inputs.timeout-seconds }}000 -Dsun.net.client.defaultReadTimeout=${{ inputs.timeout-seconds }}000 -Djava.net.useSystemProxies=true"
-      shell: bash
-      run: |
-        set -euo pipefail
-        
-        # Check if lein is already installed and correct version
-        if command -v lein >/dev/null 2>&1; then
-          INSTALLED_VERSION=$(lein version 2>/dev/null | head -n1 | cut -d' ' -f2 || echo "unknown")
-          if [ "$INSTALLED_VERSION" = "$LEIN_VERSION" ]; then
-            echo "::notice::Leiningen $LEIN_VERSION already installed, skipping"
-            exit 0
-          fi
-        fi
-        
-        echo "::notice::Installing Leiningen $LEIN_VERSION with optimized network settings"
-        
-        # Network connectivity check with timeout
-        if ! timeout $WGET_TIMEOUT wget --spider -q https://github.com/technomancy/leiningen/releases/tag/$LEIN_VERSION 2>/dev/null; then
-          echo "::warning::Network connectivity issues detected, using fallback method"
-        fi
-        
-        # Create install directory
-        sudo mkdir -p $LEIN_INSTALL
-        
-        # Download lein script with timeout and retries
-        echo "::group::Downloading Leiningen $LEIN_VERSION"
-        for attempt in 1 2 3; do
-          echo "::notice::Download attempt $attempt/3"
-          if timeout $WGET_TIMEOUT wget -q --tries=3 --timeout=$WGET_TIMEOUT \
-            -O /tmp/lein https://raw.githubusercontent.com/technomancy/leiningen/$LEIN_VERSION/bin/lein; then
-            break
-          fi
-          if [ $attempt -eq 3 ]; then
-            echo "::error::Failed to download Leiningen after 3 attempts"
-            exit 1
-          fi
-          sleep 2
-        done
-        echo "::endgroup::"
-        
-        # Install lein script
-        sudo mv /tmp/lein $LEIN_INSTALL/lein
-        sudo chmod +x $LEIN_INSTALL/lein
-        
-        # Verify installation
-        if ! command -v lein >/dev/null 2>&1; then
-          echo "::error::Leiningen installation failed - command not found"
-          exit 1
-        fi
-        
-        # Pre-download standalone jar with anti-hanging measures
-        echo "::group::Pre-downloading Leiningen standalone JAR"
-        
-        # Set Maven repository permissions
-        mkdir -p ~/.lein
-        
-        # Use timeout for lein self-install with enhanced error handling  
-        echo "::notice::Performing Leiningen self-install with $WGET_TIMEOUT second timeout"
-        if ! timeout $(($WGET_TIMEOUT * 3)) lein version >/dev/null 2>&1; then
-          echo "::warning::Initial lein version check timed out, attempting recovery"
-          
-          # Manual standalone jar download as fallback
-          JAR_URL="https://github.com/technomancy/leiningen/releases/download/$LEIN_VERSION/leiningen-$LEIN_VERSION-standalone.zip"
-          JAR_PATH="/usr/share/java"
-          
-          sudo mkdir -p $JAR_PATH
-          
-          if timeout $WGET_TIMEOUT wget -q --tries=2 --timeout=$WGET_TIMEOUT \
-            -O /tmp/lein-standalone.zip "$JAR_URL"; then
-            sudo mv /tmp/lein-standalone.zip "$JAR_PATH/leiningen-$LEIN_VERSION-standalone.jar"
-            echo "::notice::Standalone JAR downloaded manually"
-          else
-            echo "::warning::Standalone JAR download failed, proceeding anyway"
-          fi
-        fi
-        echo "::endgroup::"
-        
-        # Final verification
-        if lein version >/dev/null 2>&1; then
-          FINAL_VERSION=$(lein version 2>/dev/null | head -n1 | cut -d' ' -f2 || echo "unknown")
-          echo "::notice::✅ Successfully installed Leiningen $FINAL_VERSION"
-          echo "::notice::Installation optimized for SiraSight dependency resolution"
-        else
-          echo "::warning::Leiningen installed but version check failed (may work anyway)"
-        fi
-        
-        # Cache warming hint
-        if [ "${{ inputs.cache-enable }}" = "true" ]; then
-          echo "::notice::💾 Leiningen installation cached for future runs"
-        fi
+  - name: Install leiningen
+    env:
+      LEIN_VERSION: 2.9.1
+      LEIN_INSTALL: /usr/local/bin/
+      LEIN_SHA: a4c239b407576f94e2fef5bfa107f0d3f97d0b19c253b08860d9609df4ab8b29
+      LEIN_GPG_KEY: 2B72BF956E23DE8E946A8A37C32C83C7C8C86A87
+      LEIN_ROOT: 1
+    shell: bash
+    run: |
+      if ! command -v lein &>/dev/null; then
+        echo "Installing leiningen v${LEIN_VERSION}"
+        wget -q https://raw.githubusercontent.com/technomancy/leiningen/${LEIN_VERSION}/bin/lein
+        wget -q https://raw.githubusercontent.com/technomancy/leiningen/${LEIN_VERSION}/bin/lein.sig
+        export GNUPGHOME="$(mktemp -d)"
+        gpg --batch --keyserver hkp://keyserver.ubuntu.com --recv-keys "$LEIN_GPG_KEY"
+        gpg --batch --verify lein.sig lein
+        rm lein.sig
+        chmod +x lein
+        sudo mv lein ${LEIN_INSTALL}
+        lein version
+      else
+        echo "lein $(lein version)"
+      fi
