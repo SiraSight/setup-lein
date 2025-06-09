@@ -12,19 +12,12 @@ runs:
     env:
       LEIN_VERSION: 2.9.1
       LEIN_INSTALL: /usr/local/bin/
-      LEIN_SHA: a4c239b407576f94e2fef5bfa107f0d3f97d0b19c253b08860d9609df4ab8b29
-      LEIN_GPG_KEY: 2B72BF956E23DE8E946A8A37C32C83C7C8C86A87
       LEIN_ROOT: 1
     shell: bash
     run: |
       if ! command -v lein &>/dev/null; then
         echo "Installing leiningen v${LEIN_VERSION}"
         wget -q https://raw.githubusercontent.com/technomancy/leiningen/${LEIN_VERSION}/bin/lein
-        wget -q https://raw.githubusercontent.com/technomancy/leiningen/${LEIN_VERSION}/bin/lein.sig
-        export GNUPGHOME="$(mktemp -d)"
-        gpg --batch --keyserver hkp://keyserver.ubuntu.com --recv-keys "$LEIN_GPG_KEY"
-        gpg --batch --verify lein.sig lein
-        rm lein.sig
         chmod +x lein
         sudo mv lein ${LEIN_INSTALL}
         lein version
